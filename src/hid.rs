@@ -9,6 +9,29 @@ pub enum DualsenseReportType {
 
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
+enum DpadDirection {
+    DpadUp = 0x0,
+    UpRight = 0x1,
+    Right = 0x2,
+    DownRight = 0x3,
+    Down = 0x4,
+    DownLeft = 0x5,
+    Left = 0x6,
+    UpLeft = 0x7,
+    None = 0x8,
+}
+
+#[derive(Debug, Clone, Copy)]
+#[repr(u8)]
+enum ButtonsMask1 {
+    Square = 0x10,
+    Cross = 0x20,
+    Circle = 0x40,
+    Triangle = 0x80,
+}
+
+#[derive(Debug, Clone, Copy)]
+#[repr(u8)]
 enum ButtonsMask2 {
     LeftTrigger = 0x1,
     RightTrigger = 0x2,
@@ -20,15 +43,46 @@ enum ButtonsMask2 {
     RightStickPress = 0x80,
 }
 
-enum DPadButtons {}
+#[derive(Debug, Clone, Copy)]
+enum ButtonsMask3 {
+    Home = 0x1,
+    /// Whether or not the touchpad is being pressed. Note that this is not whether the touchpad is
+    /// being touched, but if it is being clicked down.
+    Touchpad = 0x2,
+    /// Whether the mic mute button is pressed in. Note that this is not the microphone state
+    MicMute = 0x4,
+}
 
 #[derive(Clone, Copy)]
 #[repr(packed)]
 pub struct Buttons([u8; 4]);
 
 impl Buttons {
-    fn mask1_pressed(&self, mask: ButtonsMask2) -> bool {
+    /// The D-pad directions are contained in the lower 4 bits.
+    fn dpad_direction(&self) -> DpadDirection {
+        let dpad_value = self.0[1] & 0xF;
+        match dpad_value {
+            0x0 => DpadDirection::DpadUp,
+            0x1 => DpadDirection::UpRight,
+            0x2 => DpadDirection::Right,
+            0x3 => DpadDirection::DownRight,
+            0x4 => DpadDirection::Down,
+            0x5 => DpadDirection::DownLeft,
+            0x6 => DpadDirection::Left,
+            0x7 => DpadDirection::UpLeft,
+            0x8 => DpadDirection::None,
+            _ => unreachable!("D-Pad value is masked to 4 bits, should be 0-8"),
+        }
+    }
+
+    fn mask1_pressed(&self, mask: ButtonsMask1) -> bool {
+        (self.0[1] & (mask as u8)) != 0
+    }
+    fn mask2_pressed(&self, mask: ButtonsMask2) -> bool {
         (self.0[2] & (mask as u8)) != 0
+    }
+    fn mask3_pressed(&self, mask: ButtonsMask3) -> bool {
+        (self.0[3] & (mask as u8)) != 0
     }
 }
 
@@ -37,27 +91,35 @@ impl Debug for Buttons {
         f.debug_struct("Buttons")
             .field(
                 "left_trigger",
-                &self.mask1_pressed(ButtonsMask2::LeftTrigger),
+                &self.mask2_pressed(ButtonsMask2::LeftTrigger),
             )
             .field(
                 "right_trigger",
-                &self.mask1_pressed(ButtonsMask2::RightTrigger),
+                &self.mask2_pressed(ButtonsMask2::RightTrigger),
             )
-            .field("left_bumper", &self.mask1_pressed(ButtonsMask2::LeftBumper))
+            .field("left_bumper", &self.mask2_pressed(ButtonsMask2::LeftBumper))
             .field(
                 "right_bumper",
-                &self.mask1_pressed(ButtonsMask2::RightBumper),
+                &self.mask2_pressed(ButtonsMask2::RightBumper),
             )
-            .field("create", &self.mask1_pressed(ButtonsMask2::Create))
-            .field("options", &self.mask1_pressed(ButtonsMask2::Options))
+            .field("create", &self.mask2_pressed(ButtonsMask2::Create))
+            .field("options", &self.mask2_pressed(ButtonsMask2::Options))
             .field(
                 "left_stick_press",
-                &self.mask1_pressed(ButtonsMask2::LeftStickPress),
+                &self.mask2_pressed(ButtonsMask2::LeftStickPress),
             )
             .field(
                 "right_stick_press",
-                &self.mask1_pressed(ButtonsMask2::RightStickPress),
+                &self.mask2_pressed(ButtonsMask2::RightStickPress),
             )
+            .field("dpad_direction", &self.dpad_direction())
+            .field("square", &self.mask1_pressed(ButtonsMask1::Square))
+            .field("cross", &self.mask1_pressed(ButtonsMask1::Cross))
+            .field("circle", &self.mask1_pressed(ButtonsMask1::Circle))
+            .field("triangle", &self.mask1_pressed(ButtonsMask1::Triangle))
+            .field("home", &self.mask3_pressed(ButtonsMask3::Home))
+            .field("touchpad", &self.mask3_pressed(ButtonsMask3::Touchpad))
+            .field("mic_mute", &self.mask3_pressed(ButtonsMask3::MicMute))
             .finish()
     }
 }
